@@ -53,7 +53,7 @@ curl -X PUT \
                "s3.bucket.name": "'"$AWS_BUCKET_NAME"'",
                "s3.part.size": 5242880,
                "flush.size": "3",
-               "s3.proxy.url": "https://nginx_proxy:8888",
+               "s3.proxy.url": "https://nginx-proxy:8888",
                "storage.class": "io.confluent.connect.s3.storage.S3Storage",
                "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
                "partitioner.class": "io.confluent.connect.storage.partitioner.DefaultPartitioner",
@@ -73,7 +73,7 @@ aws s3api list-objects --bucket "$AWS_BUCKET_NAME"
 log "Getting one of the avro files locally and displaying content with avro-tools"
 aws s3 cp --only-show-errors s3://$AWS_BUCKET_NAME/topics/s3_topic/partition=0/s3_topic+0+0000000000.avro s3_topic+0+0000000000.avro
 
-docker run -v ${DIR}:/tmp actions/avro-tools tojson /tmp/s3_topic+0+0000000000.avro
+docker run --rm -v ${DIR}:/tmp actions/avro-tools tojson /tmp/s3_topic+0+0000000000.avro
 rm -f s3_topic+0+0000000000.avro
 
 log "Creating S3 Source connector with bucket name <$AWS_BUCKET_NAME>"
@@ -85,7 +85,7 @@ curl -X PUT \
                "s3.region": "'"$AWS_REGION"'",
                "s3.bucket.name": "'"$AWS_BUCKET_NAME"'",
                "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
-               "s3.proxy.url": "https://nginx_proxy:8888",
+               "s3.proxy.url": "https://nginx-proxy:8888",
                "confluent.license": "",
                "confluent.topic.bootstrap.servers": "broker:9092",
                "confluent.topic.replication.factor": "1",

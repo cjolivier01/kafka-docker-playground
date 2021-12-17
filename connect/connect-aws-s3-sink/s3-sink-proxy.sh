@@ -52,7 +52,7 @@ curl -X PUT \
                "s3.bucket.name": "'"$AWS_BUCKET_NAME"'",
                "s3.part.size": 52428801,
                "flush.size": "3",
-               "s3.proxy.url": "https://nginx_proxy:8888",
+               "s3.proxy.url": "https://nginx-proxy:8888",
                "storage.class": "io.confluent.connect.s3.storage.S3Storage",
                "format.class": "io.confluent.connect.s3.format.avro.AvroFormat",
                "schema.compatibility": "NONE"
@@ -71,5 +71,5 @@ aws s3api list-objects --bucket "$AWS_BUCKET_NAME"
 log "Getting one of the avro files locally and displaying content with avro-tools"
 aws s3 cp --only-show-errors s3://$AWS_BUCKET_NAME/topics/s3_topic/partition=0/s3_topic+0+0000000000.avro s3_topic+0+0000000000.avro
 
-docker run -v ${DIR}:/tmp actions/avro-tools tojson /tmp/s3_topic+0+0000000000.avro
+docker run --rm -v ${DIR}:/tmp actions/avro-tools tojson /tmp/s3_topic+0+0000000000.avro
 rm -f s3_topic+0+0000000000.avro

@@ -16,7 +16,7 @@ then
 fi
 
 function wait_for_end_of_hibernation () {
-     MAX_WAIT=360
+     MAX_WAIT=600
      CUR_WAIT=0
      log "Waiting up to $MAX_WAIT seconds for end of hibernation to happen (it can take several minutes)"
      curl -X POST "${SERVICENOW_URL}/api/now/table/incident" --user admin:"$SERVICENOW_PASSWORD" -H 'Accept: application/json' -H 'Content-Type: application/json' -H 'cache-control: no-cache' -d '{"short_description": "This is test"}' > /tmp/out.txt 2>&1
@@ -88,6 +88,8 @@ curl -X PUT \
                "servicenow.user": "admin",
                "servicenow.password": "'"$SERVICENOW_PASSWORD"'",
                "servicenow.since": "'"$TODAY"'",
+               "topic.creation.default.replication.factor": "-1",
+               "topic.creation.default.partitions": "-1",
                "key.converter": "org.apache.kafka.connect.json.JsonConverter",
                "value.converter": "org.apache.kafka.connect.json.JsonConverter",
                "confluent.topic.ssl.endpoint.identification.algorithm" : "https",

@@ -123,7 +123,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/gcs_topic/partition=0/gcs_topic+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic+0+0000000000.avro
 19/09/30 16:48:13 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 {"f1":"value1"}
 {"f1":"value2"}
@@ -205,7 +205,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/gcs_topic-ssl/partition=0/gcs_topic-ssl+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic-ssl+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic-ssl+0+0000000000.avro
 19/09/30 16:48:13 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 {"f1":"This is a message sent with SSL authentication 1"}
 {"f1":"This is a message sent with SSL authentication 2"}
@@ -261,7 +261,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/gcs_topic-sasl-ssl/partition=0/gcs_topic-sasl-ssl+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic-sasl-ssl+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/gcs_topic-sasl-ssl+0+0000000000.avro
 19/09/30 16:48:13 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
 {"f1":"This is a message sent with SASL_SSL authentication 1"}
 {"f1":"This is a message sent with SASL_SSL authentication 2"}
@@ -316,7 +316,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/rbac_gcs_topic/partition=0/rbac_gcs_topic+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
 {"f1":"This is a message sent with Kerberos GSSAPI authentication 1"}
 {"f1":"This is a message sent with Kerberos GSSAPI authentication 2"}
 {"f1":"This is a message sent with Kerberos GSSAPI authentication 3"}
@@ -375,7 +375,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/rbac_gcs_topic/partition=0/rbac_gcs_topic+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
 {"f1":"This is a message sent with LDAP Authorizer SASL/PLAIN authentication 1"}
 {"f1":"This is a message sent with LDAP Authorizer SASL/PLAIN authentication 2"}
 {"f1":"This is a message sent with LDAP Authorizer SASL/PLAIN authentication 3"}
@@ -418,7 +418,7 @@ $ curl -X PUT \
                     "value.converter.basic.auth.user.info": "connectorSA:connectorSA",
                     "consumer.override.sasl.jaas.config": "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"connectorSA\" password=\"connectorSA\" metadataServerUrls=\"http://broker:8091\";"
           }' \
-     http://localhost:8083/connectors/gcs-rbac-sink/config | jq .
+     http://localhost:8083/connectors/my-rbac-connector/config | jq .
 ```
 
 After a few seconds, data should be in GCS:
@@ -432,7 +432,7 @@ Getting one of the avro files locally and displaying content with avro-tools:
 
 ```bash
 $ gsutil cp gs://$GCS_BUCKET_NAME/topics/rbac_gcs_topic/partition=0/rbac_gcs_topic+0+0000000000.avro /tmp/
-$ docker run -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
+$ docker run --rm -v /tmp:/tmp actions/avro-tools tojson /tmp/rbac_gcs_topic+0+0000000000.avro
 {"f1":"This is a message sent with RBAC SASL/PLAIN authentication 1"}
 {"f1":"This is a message sent with RBAC SASL/PLAIN authentication 2"}
 {"f1":"This is a message sent with RBAC SASL/PLAIN authentication 3"}

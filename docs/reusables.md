@@ -180,6 +180,20 @@ timeout 60 docker exec broker kafka-console-consumer --bootstrap-server broker:9
 timeout 60 docker exec broker kafka-console-consumer --bootstrap-server broker:9092 --topic a-topic --property print.key=true --property key.separator=, --from-beginning --max-messages 1
 ```
 
+### 🔣 [kafka-avro-console-consumer](https://docs.confluent.io/platform/current/tutorials/examples/clients/docs/kafka-commands.html#consume-avro-records)
+
+* 1️⃣ Simplest
+  
+```
+docker exec connect kafka-avro-console-consumer -bootstrap-server broker:9092 --property schema.registry.url=http://schema-registry:8081 --topic a-topic --from-beginning --max-messages 1
+```
+
+* 2️⃣ Displaying key:
+  
+```
+docker exec connect kafka-avro-console-consumer -bootstrap-server broker:9092 --property schema.registry.url=http://schema-registry:8081 --topic a-topic --property print.key=true --property key.separator=, --from-beginning --max-messages 1
+```
+
 ## ✨ Remote debugging
 
 Java Remote debugging is the perfect tool for troubleshooting Kafka connectors for example.
@@ -195,57 +209,92 @@ Make sure you have already the required Visual Studio code extensions by followi
 
 Here is a full example using [HDFS 2 sink](https://github.com/vdesabou/kafka-docker-playground/tree/master/connect/connect-hdfs2-sink) connector and [Visual Studio Code ](https://code.visualstudio.com/docs/java/java-debugging):
 
-1. Clone and open [`confluentinc/kafka-connect-hdfs`](https://github.com/confluentinc/kafka-connect-hdfs) repository in Visual Studio Code.
+1. Launch the example as usual, i.e start `./hdfs2-sink.sh`.
 
-2. Switch to the branch corresponding to the connector version you're going to run. 
+2. Clone and open [`confluentinc/kafka-connect-hdfs`](https://github.com/confluentinc/kafka-connect-hdfs) repository in Visual Studio Code.
+
+3. Switch to the branch corresponding to the connector version you're going to run. 
  
 In my example, the connector version is `10.1.1`, so I'm switching to branch tag `v10.1.1`:
 
 ![remote_debugging](./images/remote_debugging2.jpg)
 
-3. [Configure](https://code.visualstudio.com/docs/java/java-debugging#_configure) remote debugging by clicking on menu `Run`->`Add Configuration...`:
+4. Run script `../../scripts/enable-remote-debugging.sh`
 
-![remote_debugging](./images/remote_debugging1.jpg)
-
-Then copy/paste the following entry:
-
-```yml
+```
+namenode is up-to-date
+zookeeper is up-to-date
+hive-metastore-postgresql is up-to-date
+datanode is up-to-date
+presto-coordinator is up-to-date
+hive-server is up-to-date
+hive-metastore is up-to-date
+broker is up-to-date
+schema-registry is up-to-date
+Recreating connect ... done
+control-center is up-to-date
+15:34:36 ℹ️ If you use Visual Studio Code:
+15:34:36 ℹ️ Edit .vscode/launch.json with
+15:34:36 ℹ️ 
+{
+    "version": "0.2.0",
+    "configurations": [
+    
         {
             "type": "java",
-            "name": "Debug Connect container",
+            "name": "Debug connect container",
             "request": "attach",
             "hostName": "127.0.0.1",
             "port": 5005,
             "timeout": 30000
         }
+    ]
+}
+
+15:34:36 ℹ️ See https://kafka-docker-playground.io/#/reusables?id=✨-remote-debugging
+```
+   
+5. [Configure](https://code.visualstudio.com/docs/java/java-debugging#_configure) remote debugging by clicking on menu `Run`->`Add Configuration...`:
+
+![remote_debugging](./images/remote_debugging1.jpg)
+
+Then copy/paste the following entry:
+
+```json
+{
+    "type": "java",
+    "name": "Debug connect container",
+    "request": "attach",
+    "hostName": "127.0.0.1",
+    "port": 5005,
+    "timeout": 30000
+}
+```
+
+Note: you can also directly edit file `.vscode/launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+    
+        {
+            "type": "java",
+            "name": "Debug connect container",
+            "request": "attach",
+            "hostName": "127.0.0.1",
+            "port": 5005,
+            "timeout": 30000
+        }
+    ]
+}
 ```
 
 *Example:*
 
 ![remote_debugging](./images/remote_debugging3.jpg)
 
-4. Update [`connect/connect-hdfs2-sink/docker-compose.plaintext.yml`](https://github.com/vdesabou/kafka-docker-playground/blob/master/connect/connect-hdfs2-sink/docker-compose.plaintext.yml) and add `KAFKA_DEBUG: 'true'`:
-
-```yml
-  connect:
-    depends_on:
-      - zookeeper
-      - broker
-      - schema-registry
-      - hive-server
-      - presto-coordinator
-      - hive-metastore
-    environment:
-      CONNECT_PLUGIN_PATH: /usr/share/confluent-hub-components/confluentinc-kafka-connect-hdfs
-      # Java remote debugging: set
-      KAFKA_DEBUG: 'true'
-      # With JDK9+, need to specify address=*:5005, see https://www.baeldung.com/java-application-remote-debugging#from-java9
-      JAVA_DEBUG_OPTS: '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005'
-```
-
-5. Launch the example as usual, i.e start `./hdfs2-sink.sh`.
-
-6. Go in `Run and Debug` and make sure to select the `Debug Connect container` config:
+5. Go in `Run and Debug` and make sure to select the `Debug Connect container` config:
 
 ![remote_debugging](./images/remote_debugging5.jpg)
 
@@ -268,6 +317,18 @@ seq -f "{\"f1\": \"value%g\"}" 10 | docker exec -i connect kafka-avro-console-pr
 ![remote_debugging](./images/remote_debugging7.jpg)
 
 ![remote_debugging](https://github.com/vdesabou/gifs/raw/master/docs/images/remote_debugging.gif)
+
+
+Note (*for Confluent employees because control center code is proprietary*): for `control-center`, you can use following override (note the `5006` port in order to avoid clash with `connect` port):
+
+```yml
+  control-center:
+    ports:
+      - "9021:9021"
+      - "5006:5006"
+    environment:
+      CONTROL_CENTER_OPTS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5006"
+```
 
 ## 🐛 Enable DEBUG
 
@@ -363,6 +424,12 @@ docker exec --privileged --user root connect bash -c 'iptables -A INPUT -p tcp -
 > [!TIP]
 > Notice the use of `--privileged --user root`.
 
+To drop random packets, you can use statistic module like this:
+
+```bash
+docker exec --privileged --user root connect bash -c "iptables -A OUTPUT -p tcp --dport 443 -m statistic --mode random --probability 0.01 -j DROP"
+```
+
 ## 🐌 Add latency
 
 It is sometime necessary for a reproduction model to simulate latency between components.
@@ -383,12 +450,89 @@ latency_put=$(get_latency nginx_proxy connect)
 log "Latency from nginx_proxy to connect AFTER traffic control: $latency_put ms"
 
 log "Clear traffic control"
-clear_traffic_control
+clear_traffic_control nginx_proxy
 ```
+
+## 🏚 Simulate TCP connections problems
+
+[emicklei/zazkia](https://github.com/emicklei/zazkia) is a nice tool to simulate a TCP connection issues (reset,delay,throttle,corrupt).
+
+Here is an example with HDFS 2 sink connector:
+
+1. Create a folder `zazkia`and put the config file `zazkia-routes.json` in there, with the config you want:
+
+```json
+[
+    {
+        "label": "hdfs",
+        "service-hostname": "namenode",
+        "service-port": 8020,
+        "listen-port": 49998,
+        "transport": {
+            "accept-connections": true,
+            "throttle-service-response": 0,
+            "delay-service-response": 0,
+            "break-service-response": 0,
+            "service-response-corrupt-method": "",
+            "sending-to-client": true,
+            "receiving-from-client": true,
+            "sending-to-service": true,
+            "receiving-from-service": true,
+            "verbose": true
+        }
+    }
+]
+```
+
+2. In docker-compose, add the following:
+
+```yml
+  zazkia:
+    hostname: zazkia
+    container_name: zazkia
+    image: emicklei/zazkia
+    ports:
+      - "9191:9191"
+    volumes:
+      - ../../connect/connect-azure-blob-storage-sink/zazkia:/data
+```
+
+3. In connector config, update `store.url`with `hdfs://zazkia:49998`:
+
+```bash
+curl -X PUT \
+     -H "Content-Type: application/json" \
+     --data '{
+               "connector.class":"io.confluent.connect.hdfs.HdfsSinkConnector",
+               "tasks.max":"1",
+               "topics":"test_hdfs",
+               "store.url":"hdfs://zazkia:49998",
+               "flush.size":"3",
+               "hadoop.conf.dir":"/etc/hadoop/",
+               "partitioner.class":"io.confluent.connect.hdfs.partitioner.FieldPartitioner",
+               "partition.field.name":"f1",
+               "rotate.interval.ms":"120000",
+               "logs.dir":"/tmp",
+               "hive.integration": "true",
+               "hive.metastore.uris": "thrift://hive-metastore:9083",
+               "hive.database": "testhive",
+               "confluent.license": "",
+               "confluent.topic.bootstrap.servers": "broker:9092",
+               "confluent.topic.replication.factor": "1",
+               "key.converter":"org.apache.kafka.connect.storage.StringConverter",
+               "value.converter":"io.confluent.connect.avro.AvroConverter",
+               "value.converter.schema.registry.url":"http://schema-registry:8081",
+               "schema.compatibility":"BACKWARD"
+          }' \
+     http://localhost:8083/connectors/hdfs-sink/config | jq .
+```
+
+4. zazkia UI is available on [http://localhost:9191](http://localhost:9191)
+
 
 ## 🕵 TCP Dump
 
-It is sometime necessary to sniff the network in order to better undertsand what's going on.
+It is sometime necessary to sniff the network in order to better understand what's going on.
 
 The [connect image](/how-it-works?id=🔗-connect-image-used) used by the playground contains [`tcpdump`](https://www.tcpdump.org) tool for that purpose.
 
@@ -406,6 +550,12 @@ Once you test is over, you can get the `tcpdump.pcap` file (that you can open wi
 
 ```bash
 docker cp connect:/tmp/tcpdump.pcap .
+```
+
+For other UBI8 images, you can install tcpdump like this:
+
+```bash
+docker exec --privileged --user root control-center bash -c "curl http://mirror.centos.org/centos/8-stream/AppStream/x86_64/os/Packages/tcpdump-4.9.3-1.el8.x86_64.rpm -o tcpdump-4.9.3-1.el8.x86_64.rpm && rpm -Uvh tcpdump-4.9.3-1.el8.x86_64.rpm"
 ```
 
 ## 🌐 Using HTTPS proxy
@@ -431,10 +581,10 @@ Here are the steps to follow:
 3. Add this in your `docker-compose` file:
 
 ```yml
-  nginx_proxy:
+  nginx-proxy:
     image: reiz/nginx_proxy:latest
-    hostname: nginx_proxy
-    container_name: nginx_proxy
+    hostname: nginx-proxy
+    container_name: nginx-proxy
     ports:
       - "8888:8888"
     volumes:
@@ -454,12 +604,12 @@ Here are the steps to follow:
     dns: 0.0.0.0
 ```
 
-5. In you connector configuration, update the proxy configuration parameter with `https://nginx_proxy:8888`.
+5. In you connector configuration, update the proxy configuration parameter with `https://nginx-proxy:8888`.
 
 *Example:*
 
 ```json
-"s3.proxy.url": "https://nginx_proxy:8888"
+"s3.proxy.url": "https://nginx-proxy:8888"
 ```
 
 > [!NOTE]

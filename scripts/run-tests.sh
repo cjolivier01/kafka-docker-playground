@@ -61,9 +61,9 @@ do
             continue
         fi
 
+        THE_CONNECTOR_TAG=""
         if [[ "$dir" == "connect"* ]]
         then
-            THE_CONNECTOR_TAG=""
             docker_compose_file=$(grep "environment" "$script" | grep DIR | grep start.sh | cut -d "/" -f 7 | cut -d '"' -f 1 | head -n1)
             if [ "${docker_compose_file}" != "" ] && [ -f "${docker_compose_file}" ]
             then
@@ -115,6 +115,8 @@ do
                 then
                     curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_1.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=1"
                     curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_2.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=2"
+                    curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_3.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=3"
+                    curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_4.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=4"
                 fi
                 v=$(echo $tag | sed -e 's/\./[.]/g')
                 html_url=$(cat "/tmp/${gh_run_id}_1.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${dir}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
@@ -125,13 +127,23 @@ do
                     html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
                     if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
                     then
-                        logerror "ERROR: Could not retrieve job url!"
+                        html_url=$(cat "/tmp/${gh_run_id}_3.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${dir}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
+                        html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
+                        if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
+                        then
+                            html_url=$(cat "/tmp/${gh_run_id}_4.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${dir}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
+                            html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
+                            if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
+                            then
+                                logerror "ERROR: Could not retrieve job url!"
+                            fi
+                        fi
                     fi
                 fi
             fi
 
             # for servicenow tests, run tests at least every 4 days
-            if [[ "$dir" == "connect-servicenow-"* ]] && [[ $elapsed_time -gt 322560 ]]
+            if [[ "$dir" == "connect/connect-servicenow-"* ]] && [[ $elapsed_time -gt 322560 ]]
             then
                 log "####################################################"
                 log "⌛ Test with CP $TAG and connector $THE_CONNECTOR_TAG has already been executed successfully $(displaytime $elapsed_time) ago, more than 4 days ago...re-running. Test url: $html_url"
@@ -199,6 +211,13 @@ do
             log "####################################################"
 
             echo "$connector_path|`date +%s`|known_issue#907|$GITHUB_RUN_ID" > $file
+        elif [ $ret -eq 111 ]
+        then
+            log "####################################################"
+            log "⏭ RESULT: SKIPPED for $script in dir $dir ($ELAPSED - $CUMULATED)"
+            log "####################################################"
+
+            echo "$connector_path|`date +%s`|skipped|$GITHUB_RUN_ID" > $file
         else
             logerror "####################################################"
             logerror "🔥 RESULT: FAILURE for $script in dir $dir ($ELAPSED - $CUMULATED)"

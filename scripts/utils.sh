@@ -135,7 +135,7 @@ function choosejar()
 if [ -z "$TAG" ]
 then
     # TAG is not set, use default:
-    export TAG=7.0.0
+    export TAG=7.0.1
     # to handle ubi8 images
     export TAG_BASE=$TAG
     if [ -z "$CP_KAFKA_IMAGE" ]
@@ -146,7 +146,7 @@ then
     export CP_KAFKA_IMAGE=confluentinc/cp-server
     export CP_BASE_IMAGE=confluentinc/cp-base-new
     export CP_KSQL_IMAGE=confluentinc/cp-ksqldb-server
-    export CP_KSQL_CLI_IMAGE=confluentinc/ksqldb-cli:latest
+    export CP_KSQL_CLI_IMAGE=confluentinc/cp-ksqldb-cli:latest
     set_kafka_client_tag
 else
     if [ -z "$CP_KAFKA_IMAGE" ]
@@ -158,7 +158,7 @@ else
     first_version=${TAG_BASE}
     second_version=5.2.99
     if version_gt $first_version $second_version; then
-        if [ "$first_version" == "5.3.6" ]
+        if [ "$first_version" = "5.3.6" ]
         then
           logwarn "Workaround for ST-6539, using custom image vdesabou/cp-server !"
           export CP_KAFKA_IMAGE=vdesabou/cp-server
@@ -177,7 +177,7 @@ else
     second_version=5.4.99
     if version_gt $first_version $second_version; then
         export CP_KSQL_IMAGE=confluentinc/cp-ksqldb-server
-        export CP_KSQL_CLI_IMAGE=confluentinc/ksqldb-cli:latest
+        export CP_KSQL_CLI_IMAGE=confluentinc/cp-ksqldb-cli:${TAG_BASE}
     else
         export CP_KSQL_IMAGE=confluentinc/cp-ksql-server
         export CP_KSQL_CLI_IMAGE=confluentinc/cp-ksql-cli:${TAG_BASE}
@@ -241,7 +241,11 @@ then
   else
     log "🎯 CONNECTOR_TAG is set with version $CONNECTOR_TAG"
     # determining the connector from current path
-    docker_compose_file=$(grep "environment" "$PWD/$0" | grep DIR | grep start.sh | cut -d "/" -f 7 | cut -d '"' -f 1 | head -n1)
+    docker_compose_file=""
+    if [ -f "$PWD/$0" ]
+    then
+      docker_compose_file=$(grep "environment" "$PWD/$0" | grep DIR | grep start.sh | cut -d "/" -f 7 | cut -d '"' -f 1 | head -n1)
+    fi
     if [ "${docker_compose_file}" != "" ] && [ -f "${docker_compose_file}" ]
     then
       connector_path=$(grep "CONNECT_PLUGIN_PATH" "${docker_compose_file}" | cut -d "/" -f 5 | head -1)
@@ -331,7 +335,11 @@ else
   then
     :
   else
-    docker_compose_file=$(grep "environment" "$PWD/$0" | grep DIR | grep start.sh | cut -d "/" -f 7 | cut -d '"' -f 1 | head -n1)
+    docker_compose_file=""
+    if [ -f "$PWD/$0" ]
+    then
+      docker_compose_file=$(grep "environment" "$PWD/$0" | grep DIR | grep start.sh | cut -d "/" -f 7 | cut -d '"' -f 1 | head -n1)
+    fi
     if [ "${docker_compose_file}" != "" ] && [ -f "${docker_compose_file}" ]
     then
       connector_paths=$(grep "CONNECT_PLUGIN_PATH" "${docker_compose_file}" | grep -v "KSQL_CONNECT_PLUGIN_PATH" | cut -d ":" -f 2  | tr -s " " | head -1)
@@ -621,6 +629,10 @@ function get_confluent_version() {
   confluent version | grep "^Version:" | cut -d':' -f2 | cut -d'v' -f2
 }
 
+function get_ansible_version() {
+  ansible --version | grep "core" | cut -d'[' -f2 | cut -d']' -f1 | cut -d' ' -f 2
+}
+
 function check_confluent_version() {
   REQUIRED_CONFLUENT_VER=${1:-"2.0.0"}
   CONFLUENT_VER=$(get_confluent_version)
@@ -730,9 +742,9 @@ function retry() {
     if [ $ret -eq 0 ]
     then
       return 0
-    elif [ $ret -eq 123 ] # skipped
+    elif [ $ret -eq 111 ] # skipped
     then
-      return 123
+      return 111
     elif [ $ret -eq 107 ] # known issue https://github.com/vdesabou/kafka-docker-playground/issues/907
     then
       return 107
@@ -1038,19 +1050,37 @@ done
   log "JMX metrics are available in /tmp/jmx_metrics.log file"
 }
 
-container_to_name() {
+# https://www.linuxjournal.com/content/validating-ip-address-bash-script
+function valid_ip()
+{
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
+function container_to_name() {
     container=$1
     echo "${PWD##*/}_${container}_1"
 }
 
-container_to_ip() {
+function container_to_ip() {
     if [ $# -lt 1 ]; then
         echo "Usage: container_to_ip container"
     fi
     echo $(docker inspect $1 -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
 }
 
-clear_traffic_control() {
+function clear_traffic_control() {
     if [ $# -lt 1 ]; then
         echo "Usage: clear_traffic_control src_container"
     fi
@@ -1060,10 +1090,10 @@ clear_traffic_control() {
     echo "Removing all traffic control settings on $src_container"
 
     # Delete the entry from the tc table so the changes made to tc do not persist
-    docker exec --privileged -u0 -t $src_container tc qdisc del dev eth0 root 2>&1
+    docker exec --privileged -u0 -t $src_container tc qdisc del dev eth0 root
 }
 
-get_latency() {
+function get_latency() {
     if [ $# -lt 2 ]; then
         echo "Usage: get_latency src_container dst_container"
     fi
@@ -1073,43 +1103,146 @@ get_latency() {
 }
 
 # https://serverfault.com/a/906499
-add_latency() {
+function add_latency() {
     if [ $# -lt 3 ]; then
-        echo "Usage: add_latency src_container dst_container latency"
-        echo "Exemple: add_latency container-1 container-2 100ms"
+        echo "Usage: add_latency src_container dst_container (or ip address) latency"
+        echo "Example: add_latency container-1 container-2 100ms"
     fi
 
     src_container=$1
-    dst_container_ip=$(container_to_ip $2)
+    if valid_ip $2
+    then 
+      dst_ip=$2
+    else 
+      dst_ip=$(container_to_ip $2)
+    fi
     latency=$3
 
-    echo "Adding $latency from $src_container to $2"
+    set +e
+    clear_traffic_control $src_container
+    set -e
+
+    echo "Adding $latency latency from $src_container to $2"
 
     # Add a classful priority queue which lets us differentiate messages.
     # This queue is named 1:.
     # Three children classes, 1:1, 1:2 and 1:3, are automatically created.
-    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 root handle 1: prio 2>&1
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 root handle 1: prio
 
 
     # Add a filter to the parent queue 1: (also called 1:0). The filter has priority 1 (if we had more filters this would make a difference).
-    # For all messages with the ip of dst_container_ip as their destination, it routes them to class 1:1, which
+    # For all messages with the ip of dst_ip as their destination, it routes them to class 1:1, which
     # subsequently sends them to its only child, queue 10: (All messages need to  "end up" in a queue).
-    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol ip parent 1: prio 1 u32 match ip dst $dst_container_ip flowid 1:1 2>&1
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol ip parent 1: prio 1 u32 match ip dst $dst_ip flowid 1:1
 
     # Route the rest of the of the packets without any control.
     # Add a filter to the parent queue 1:. The filter has priority 2.
-    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip dst 0.0.0.0/0 flowid 1:2 2>&1
-    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip protocol 1 0xff flowid 1:2 2>&1
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip dst 0.0.0.0/0 flowid 1:2
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip protocol 1 0xff flowid 1:2
 
     # Add a child queue named 10: under class 1:1. All outgoing packets that will be routed to 10: will have delay applied them.
-    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:1 handle 10: netem delay $latency 2>&1
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:1 handle 10: netem delay $latency
 
     # Add a child queue named 20: under class 1:2
-    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:2 handle 20: sfq 2>&1
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:2 handle 20: sfq
+}
+
+function add_packet_corruption() {
+    if [ $# -lt 3 ]; then
+        echo "Usage: add_packet_corruption src_container dst_container (or ip address) corrupt"
+        echo "Exemple: add_packet_corruption container-1 container-2 1%"
+    fi
+
+    src_container=$1
+    if valid_ip $2
+    then 
+      dst_ip=$2
+    else 
+      dst_ip=$(container_to_ip $2)
+    fi
+    corruption=$3
+
+    set +e
+    clear_traffic_control $src_container
+    set -e
+
+    echo "Adding $corruption corruption from $src_container to $2"
+
+    # Add a classful priority queue which lets us differentiate messages.
+    # This queue is named 1:.
+    # Three children classes, 1:1, 1:2 and 1:3, are automatically created.
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 root handle 1: prio 
+
+
+    # Add a filter to the parent queue 1: (also called 1:0). The filter has priority 1 (if we had more filters this would make a difference).
+    # For all messages with the ip of dst_ip as their destination, it routes them to class 1:1, which
+    # subsequently sends them to its only child, queue 10: (All messages need to  "end up" in a queue).
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol ip parent 1: prio 1 u32 match ip dst $dst_ip flowid 1:1 
+
+    # Route the rest of the of the packets without any control.
+    # Add a filter to the parent queue 1:. The filter has priority 2.
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip dst 0.0.0.0/0 flowid 1:2 
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip protocol 1 0xff flowid 1:2 
+
+    # Add a child queue named 10: under class 1:1. All outgoing packets that will be routed to 10: will have corrupt applied them.
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:1 handle 10: netem corrupt $corruption
+
+    # Add a child queue named 20: under class 1:2
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:2 handle 20: sfq 
+}
+
+function add_packet_loss() {
+    if [ $# -lt 3 ]; then
+        echo "Usage: add_packet_loss src_container dst_container (or ip address) corrupt"
+        echo "Exemple: add_packet_loss container-1 container-2 1%"
+    fi
+
+    src_container=$1
+    if valid_ip $2
+    then 
+      dst_ip=$2
+    else 
+      dst_ip=$(container_to_ip $2)
+    fi
+    loss=$3
+
+    set +e
+    clear_traffic_control $src_container
+    set -e
+
+    echo "Adding $loss loss from $src_container to $2"
+
+    # Add a classful priority queue which lets us differentiate messages.
+    # This queue is named 1:.
+    # Three children classes, 1:1, 1:2 and 1:3, are automatically created.
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 root handle 1: prio 
+
+
+    # Add a filter to the parent queue 1: (also called 1:0). The filter has priority 1 (if we had more filters this would make a difference).
+    # For all messages with the ip of dst_ip as their destination, it routes them to class 1:1, which
+    # subsequently sends them to its only child, queue 10: (All messages need to  "end up" in a queue).
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol ip parent 1: prio 1 u32 match ip dst $dst_ip flowid 1:1 
+
+    # Route the rest of the of the packets without any control.
+    # Add a filter to the parent queue 1:. The filter has priority 2.
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip dst 0.0.0.0/0 flowid 1:2 
+    docker exec --privileged -u0 -t $src_container tc filter add dev eth0 protocol all parent 1: prio 2 u32 match ip protocol 1 0xff flowid 1:2 
+
+    # Add a child queue named 10: under class 1:1. All outgoing packets that will be routed to 10: will have loss applied them.
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:1 handle 10: netem loss $loss
+
+    # Add a child queue named 20: under class 1:2
+    docker exec --privileged -u0 -t $src_container tc qdisc add dev eth0 parent 1:2 handle 20: sfq 
 }
 
 function get_3rdparty_file () {
   file="$1"
+
+  if [ -f $file ]
+  then
+    log "$file already present, skipping"
+    return
+  fi
 
   set +e
   aws s3 ls s3://kafka-docker-playground/3rdparty/$file > /dev/null 2>&1
@@ -1122,6 +1255,28 @@ function get_3rdparty_file () {
       fi
   fi
   set -e
+}
+
+function remove_cdb_oracle_image() {
+  ZIP_FILE="$1"
+  SETUP_FOLDER="$2"
+
+  if [ "$ZIP_FILE" == "linuxx64_12201_database.zip" ]
+  then
+      ORACLE_VERSION="12.2.0.1-ee"
+  else
+      ORACLE_VERSION="19.3.0-ee"
+  fi
+
+  SETUP_FILE=${SETUP_FOLDER}/01_user-setup.sh
+  SETUP_FILE_CKSUM=$(cksum $SETUP_FILE | awk '{ print $1 }')
+  ORACLE_IMAGE="db-prebuilt-$SETUP_FILE_CKSUM:$ORACLE_VERSION"
+
+  if ! test -z "$(docker images -q $ORACLE_IMAGE)"
+  then
+    log "🧹 Removing Oracle image $ORACLE_IMAGE"
+    docker image rm $ORACLE_IMAGE
+  fi
 }
 
 function create_or_get_oracle_image() {
@@ -1151,12 +1306,16 @@ function create_or_get_oracle_image() {
     then
         log "Downloading <s3://kafka-docker-playground/3rdparty/$ORACLE_IMAGE.tar> from S3 bucket"
         aws s3 cp --only-show-errors "s3://kafka-docker-playground/3rdparty/$ORACLE_IMAGE.tar" /tmp/
-        if [ $? -eq 0 ]; then
-              log "📄 <s3://kafka-docker-playground/3rdparty/$ORACLE_IMAGE.tar> was downloaded from S3 bucket"
-        fi
-        docker load -i /tmp/$ORACLE_IMAGE.tar
-        if [ $? -eq 0 ]; then
-              log "📄 image $ORACLE_IMAGE has been installed locally"
+        if [ $? -eq 0 ]
+        then
+          log "📄 <s3://kafka-docker-playground/3rdparty/$ORACLE_IMAGE.tar> was downloaded from S3 bucket"
+          docker load -i /tmp/$ORACLE_IMAGE.tar
+          if [ $? -eq 0 ]
+          then
+            log "📄 image $ORACLE_IMAGE has been installed locally"
+          fi
+          log "🧹 Removing /tmp/$ORACLE_IMAGE.tar"
+          rm -f /tmp/$ORACLE_IMAGE.tar
         fi
     fi
     set -e
@@ -1178,12 +1337,16 @@ function create_or_get_oracle_image() {
     then
         log "Downloading <s3://kafka-docker-playground/3rdparty/oracle_database_$ORACLE_VERSION.tar> from S3 bucket"
         aws s3 cp --only-show-errors "s3://kafka-docker-playground/3rdparty/oracle_database_$ORACLE_VERSION.tar" /tmp/
-        if [ $? -eq 0 ]; then
-              log "📄 <s3://kafka-docker-playground/3rdparty/oracle_database_$ORACLE_VERSION.tar> was downloaded from S3 bucket"
-        fi
-        docker load -i /tmp/oracle_database_$ORACLE_VERSION.tar
-        if [ $? -eq 0 ]; then
-              log "📄 image $BASE_ORACLE_IMAGE has been installed locally"
+        if [ $? -eq 0 ]
+        then
+          log "📄 <s3://kafka-docker-playground/3rdparty/oracle_database_$ORACLE_VERSION.tar> was downloaded from S3 bucket"
+          docker load -i /tmp/oracle_database_$ORACLE_VERSION.tar
+          if [ $? -eq 0 ]
+          then
+            log "📄 image $BASE_ORACLE_IMAGE has been installed locally"
+          fi
+          log "🧹 Removing /tmp/$ORACLE_IMAGE.tar"
+          rm -f /tmp/oracle_database_$ORACLE_VERSION.tar
         fi
     fi
     set -e

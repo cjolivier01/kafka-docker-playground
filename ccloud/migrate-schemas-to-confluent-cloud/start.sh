@@ -6,10 +6,18 @@ source ${DIR}/../../scripts/utils.sh
 
 if ! version_gt $TAG_BASE "5.2.0"; then
     logwarn "WARN: Audit logs is only available from Confluent Platform 5.2.0"
-    exit 0
+    exit 111
 fi
 
 ${DIR}/../../ccloud/environment/start.sh "${PWD}/docker-compose-executable-onprem-to-cloud.yml" -a -b
+
+if [ -f /tmp/delta_configs/env.delta ]
+then
+     source /tmp/delta_configs/env.delta
+else
+     logerror "ERROR: /tmp/delta_configs/env.delta has not been generated"
+     exit 1
+fi
 
 # generate executable-onprem-to-cloud-producer.properties config
 sed -e "s|:BOOTSTRAP_SERVERS:|$BOOTSTRAP_SERVERS|g" \

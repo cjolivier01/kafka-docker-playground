@@ -6,7 +6,7 @@ on:
   #      - master
 
   schedule:
-      - cron: '0 16 * * *' # every day at 4 pm
+      - cron: '0 18 * * *' # every day at 6 pm
 
   workflow_dispatch:
     inputs:
@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: ["5.3.6","5.4.5","5.5.6","6.0.4","6.1.3","6.2.1","7.0.0"]
+        tag: ["5.3.7","5.4.6","5.5.7","6.0.5","6.1.4","6.2.2","7.0.1"]
         test_list : [
                       "🚀 connect/connect-servicenow-sink connect/connect-servicenow-source",
                       "🚀 connect/connect-salesforce-bulkapi-sink connect/connect-salesforce-bulkapi-source connect/connect-salesforce-pushtopics-source connect/connect-salesforce-sobject-sink connect/connect-salesforce-cdc-source connect/connect-salesforce-platform-events-sink connect/connect-salesforce-platform-events-source",
@@ -75,10 +75,10 @@ jobs:
                       "🚀 connect/connect-azure-data-lake-storage-gen1-sink connect/connect-azure-data-lake-storage-gen2-sink connect/connect-azure-event-hubs-source connect/connect-azure-cognitive-search-sink connect/connect-azure-functions-sink connect/connect-azure-service-bus-source connect/connect-azure-blob-storage-source",
                       "🚀 connect/connect-ftps-source connect/connect-ftps-sink connect/connect-rabbitmq-sink connect/connect-amps-source connect/connect-jira-source connect/connect-github-source connect/connect-pivotal-gemfire-sink connect/connect-azure-blob-storage-sink connect/connect-azure-sql-data-warehouse-sink",
                       "🚀 connect/connect-http-sink",
-                      "🚀 replicator/connect",
-                      "🚀 replicator/executable",
-                      "🚀 replicator/mirrormaker2 ksqldb/materialized-view connect/connect-pagerduty-sink connect/connect-zendesk-source connect/connect-datadog-metrics-sink connect/connect-gcp-spanner-sink connect/connect-gcp-firebase-source connect/connect-gcp-firebase-sink",
-                      "🚀 other/filebeat-to-kafka other/rest-proxy-security-plugin other/tiered-storage-with-aws other/write-logs-to-files other/audit-logs other/multiple-event-types-in-topic other/broker-schema-validation other/schema-registry-security-plugin other/cluster-linking",
+                      "🚀 multi-data-center/replicator-connect",
+                      "🚀 multi-data-center/replicator-executable",
+                      "🚀 multi-data-center/mirrormaker2 ksqldb/materialized-view connect/connect-pagerduty-sink connect/connect-zendesk-source connect/connect-datadog-metrics-sink connect/connect-gcp-spanner-sink connect/connect-gcp-firebase-source connect/connect-gcp-firebase-sink",
+                      "🚀 other/filebeat-to-kafka other/rest-proxy-security-plugin other/tiered-storage-with-aws other/tiered-storage-with-minio other/write-logs-to-files other/audit-logs other/multiple-event-types-in-topic other/broker-schema-validation other/schema-registry-security-plugin multi-data-center/cluster-linking other/secrets-management other/ldap-authorizer-with-ldap-failover",
                       "🚀 ccloud/replicator",
                       "🚀 ccloud/ccloudexporter ccloud/connect-debezium-mongodb-source ccloud/connect-aws-kinesis-source ccloud/kafka-admin ccloud/rest-proxy-security-plugin ccloud/schema-registry-security-plugin",
                       "🚀 connect/connect-cdc-oracle12-source",
@@ -87,8 +87,8 @@ jobs:
                       "🚀 connect/connect-weblogic-source connect/connect-jms-weblogic-sink connect/connect-jms-weblogic-source",
                       "🚀 connect/connect-azure-cosmosdb-source connect/connect-azure-cosmosdb-sink connect/connect-jdbc-cockroachdb-source connect/connect-jdbc-ibmdb2-source connect/connect-jdbc-ibmdb2-sink",
                       "🚀 environment/plaintext environment/2way-ssl environment/kerberos environment/ldap-authorizer-sasl-plain environment/ldap-sasl-plain environment/mdc-kerberos environment/mdc-plaintext environment/mdc-sasl-plain environment/rbac-sasl-plain environment/sasl-plain environment/sasl-scram environment/sasl-ssl environment/ssl_kerberos connect/connect-snowflake-sink connect/connect-jdbc-snowflake-source connect/connect-jdbc-snowflake-sink connect/connect-filestream-source connect/connect-filestream-sink connect/connect-filepulse-source",
-                      # do not remove, this is run by run-regression-self-managed.yml, but required to update README file
-                      # "🚀 connect/connect-mapr-sink"
+                      "🚀 connect/connect-mapr-sink",
+                      "🚀 other/syslog-logstash-ksqldb"
                     ]
     steps:
       - name: Checkout code
@@ -140,7 +140,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: ["5.3.6","5.4.5","5.5.6","6.0.4","6.1.3","6.2.1","7.0.0"]
+        tag: ["5.3.7","5.4.6","5.5.7","6.0.5","6.1.4","6.2.2","7.0.1"]
         test_list : [
                       "🚀 ${{ github.event.inputs.test_name }}"
                     ]
@@ -221,7 +221,7 @@ jobs:
 
       - name: Update README
         run: |
-          ./scripts/update-readme.sh "5.3.6 5.4.5 5.5.6 6.0.4 6.1.3 6.2.1 7.0.0"
+          ./scripts/update-readme.sh "5.3.7 5.4.6 5.5.7 6.0.5 6.1.4 6.2.2 7.0.1"
       - name: push
         uses: github-actions-x/commit@v2.6
         with:

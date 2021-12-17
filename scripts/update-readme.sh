@@ -72,6 +72,7 @@ do
   nb_success=0
   TEST_FAILED=()
   TEST_SUCCESS=()
+  TEST_SKIPPED=()
   rm -f ${gh_msg_file}
   touch ${gh_msg_file}
   rm -f ${gh_msg_file_intro}
@@ -171,6 +172,8 @@ do
         then
           curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_1.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=1"
           curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_2.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=2"
+          curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_3.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=3"
+          curl -s -u vdesabou:$GITHUB_TOKEN -H "Accept: application/vnd.github.v3+json" -o "/tmp/${gh_run_id}_4.json" "https://api.github.com/repos/vdesabou/kafka-docker-playground/actions/runs/${gh_run_id}/jobs?per_page=100&page=4"
         fi
         v=$(echo $image_version | sed -e 's/\./[.]/g')
         html_url=$(cat "/tmp/${gh_run_id}_1.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${test}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
@@ -181,9 +184,19 @@ do
           html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
           if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
           then
-            logerror "ERROR: Could not retrieve job url! Forcing re-run for next time..."
-            s3_file="s3://kafka-docker-playground/ci/${image_version}-${testdir}-${version}-${script_name}"
-            aws s3 rm $s3_file --region us-east-1
+            html_url=$(cat "/tmp/${gh_run_id}_3.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${test}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
+            html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
+            if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
+            then
+              html_url=$(cat "/tmp/${gh_run_id}_4.json" | jq ".jobs |= map(select(.name | test(\"${v}.*${test}\")))" | jq '[.jobs | .[] | {name: .name, html_url: .html_url }]' | jq '.[0].html_url')
+              html_url=$(echo "$html_url" | sed -e 's/^"//' -e 's/"$//')
+              if [ "$html_url" = "" ] || [ "$html_url" = "null" ]
+              then
+                logerror "ERROR: Could not retrieve job url! Forcing re-run for next time..."
+                s3_file="s3://kafka-docker-playground/ci/${image_version}-${testdir}-${version}-${script_name}"
+                aws s3 rm $s3_file --region us-east-1
+              fi
+            fi
           fi
         fi
         if [ "$last_execution_time" != "" ]
@@ -212,7 +225,7 @@ do
         then
           let "nb_fail++"
           let "nb_total_fail++"
-          TEST_FAILED[$image_version_no_dot]="[![CP $image_version](https://img.shields.io/badge/CI-CP%20$image_version-red)]($html_url)"
+          TEST_FAILED[$image_version_no_dot]="[![CP $image_version](https://img.shields.io/badge/$nb_success/$nb_tests-CP%20$image_version-red)]($html_url)"
           echo -e "🔥 CP ${image_version}${connector_version} 🕐 ${time_day_hour} 📄 [${script_name}](https://github.com/vdesabou/kafka-docker-playground/blob/master/$test/$script_name) 🔗 $html_url\n" >> ${gh_msg_file}
           log "🔥 CP $image_version 🕐 ${time_day_hour} 📄 ${script_name} 🔗 $html_url"
         elif [[ "$status" = known_issue* ]]
@@ -224,10 +237,17 @@ do
           
           echo -e "💀 known issue 🐞 [#${known_issue_gh_issue_number}](https://github.com/vdesabou/kafka-docker-playground/issues/${known_issue_gh_issue_number}) CP ${image_version}${connector_version} 🕐 ${time_day_hour} 📄 [${script_name}](https://github.com/vdesabou/kafka-docker-playground/blob/master/$test/$script_name) 🔗 $html_url\n" >> ${gh_msg_file}
           log "💀 known issue 🐞 [#${known_issue_gh_issue_number}](https://github.com/vdesabou/kafka-docker-playground/issues/${known_issue_gh_issue_number}) CP ${image_version}${connector_version} 🕐 ${time_day_hour} 📄 [${script_name}](https://github.com/vdesabou/kafka-docker-playground/blob/master/$test/$script_name) 🔗 $html_url"
+        elif [ "$status" == "skipped" ]
+        then
+          let "nb_success++"
+          let "nb_total_success++"
+          TEST_SKIPPED[$image_version_no_dot]="[![CP $image_version](https://img.shields.io/badge/skipped-CP%20$image_version-lightgrey)]($html_url)"
+          echo -e "⏭ SKIPPED CP ${image_version}${connector_version} 🕐 ${time_day_hour} 📄 [${script_name}](https://github.com/vdesabou/kafka-docker-playground/blob/master/$test/$script_name) 🔗 $html_url\n" >> ${gh_msg_file}
+          log "⏭ SKIPPED CP $image_version 🕐 ${time_day_hour} 📄 ${script_name} 🔗 $html_url"
         else
           let "nb_success++"
           let "nb_total_success++"
-          TEST_SUCCESS[$image_version_no_dot]="[![CP $image_version](https://img.shields.io/badge/CI-CP%20$image_version-green)]($html_url)"
+          TEST_SUCCESS[$image_version_no_dot]="[![CP $image_version](https://img.shields.io/badge/$nb_success/$nb_tests-CP%20$image_version-green)]($html_url)"
           echo -e "👍 CP ${image_version}${connector_version} 🕐 ${time_day_hour} 📄 [${script_name}](https://github.com/vdesabou/kafka-docker-playground/blob/master/$test/$script_name) 🔗 $html_url\n" >> ${gh_msg_file}
           log "👍 CP $image_version 🕐 ${time_day_hour} 📄 ${script_name} 🔗 $html_url"
         fi
@@ -280,6 +300,7 @@ do
 
   ci=""
   ci_nb_fail=0
+  ci_nb_skipped=0
   nb_image_versions=0
   for image_version in $image_versions
   do
@@ -290,25 +311,29 @@ do
       gh_issue_number=$(echo $gh_issue_number|tr -d '\n')
       if [ "${gh_issue_number}" != "" ]
       then
-        ci="$ci [![issue $gh_issue_number](https://img.shields.io/badge/CI-CP%20$image_version-red)](https://github.com/vdesabou/kafka-docker-playground/issues/$gh_issue_number)"
+        ci="$ci [![issue $gh_issue_number](https://img.shields.io/badge/$nb_success/$nb_tests-CP%20$image_version-red)](https://github.com/vdesabou/kafka-docker-playground/issues/$gh_issue_number)"
       else
         ci="$ci ${TEST_FAILED[$image_version_no_dot]}"
       fi
       let "ci_nb_fail++"
+    elif [ "${TEST_SKIPPED[$image_version_no_dot]}" != "" ]
+    then
+      ci="$ci ${TEST_SKIPPED[$image_version_no_dot]}"
+      let "ci_nb_skipped++"
     elif [ "${TEST_SUCCESS[$image_version_no_dot]}" != "" ]
     then
       ci="$ci ${TEST_SUCCESS[$image_version_no_dot]}"
     else
-      logerror "ERROR: TEST_SUCCESS and TEST_FAILED are both empty !"
+      logerror "ERROR: TEST_SUCCESS, TEST_SKIPPED and TEST_FAILED are all empty !"
     fi
   done
 
-  if [ ${ci_nb_fail} -eq 0 ]
+  if [ ${ci_nb_fail} -eq 0 ] && [ ${ci_nb_skipped} -eq 0 ]
   then
-      ci="[![CI ok](https://img.shields.io/badge/CI-ok!-green)]($html_url)"
+      ci="[![CI ok](https://img.shields.io/badge/$nb_success/$nb_tests-ok!-green)]($html_url)"
   elif [ ${ci_nb_fail} -eq ${nb_image_versions} ]
   then
-      ci="[![CI fail](https://img.shields.io/badge/CI-fail!-red)](https://github.com/vdesabou/kafka-docker-playground/issues/$gh_issue_number)"
+      ci="[![CI fail](https://img.shields.io/badge/$nb_success/$nb_tests-fail!-red)](https://github.com/vdesabou/kafka-docker-playground/issues/$gh_issue_number)"
   fi
 
   if [ "$connector_path" != "" ]

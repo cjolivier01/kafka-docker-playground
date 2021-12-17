@@ -7,7 +7,7 @@ source ${DIR}/../../scripts/utils.sh
 
 if ! version_gt $TAG_BASE "5.3.99"; then
     logwarn "WARN: This RBAC example is working starting from CP 5.4 only"
-    exit 0
+    exit 111
 fi
 
 verify_docker_and_memory
@@ -30,6 +30,31 @@ then
 else
   log "🛑 ksqldb is disabled"
 fi
+
+mkdir -p ${DIR}/scripts/security/ldap_certs
+cd ${DIR}/scripts/security/ldap_certs
+if [[ "$OSTYPE" == "darwin"* ]]
+then
+    # workaround for issue on linux, see https://github.com/vdesabou/kafka-docker-playground/issues/851#issuecomment-821151962
+    chmod -R a+rw .
+else
+    # on CI, docker is run as runneradmin user, need to use sudo
+    ls -lrt
+    sudo chmod -R a+rw .
+    ls -lrt
+fi
+log "LDAPS: Creating a Root Certificate Authority (CA)"
+docker run --rm -v $PWD:/tmp vdesabou/kafka-docker-playground-connect:${CONNECT_TAG} openssl req -new -x509 -days 365 -nodes -out /tmp/ca.crt -keyout /tmp/ca.key -subj "/CN=root-ca"
+log "LDAPS: Generate the LDAPS server key and certificate"
+docker run --rm -v $PWD:/tmp vdesabou/kafka-docker-playground-connect:${CONNECT_TAG} openssl req -new -nodes -out /tmp/server.csr -keyout /tmp/server.key -subj "/CN=openldap"
+docker run --rm -v $PWD:/tmp vdesabou/kafka-docker-playground-connect:${CONNECT_TAG} openssl x509 -req -in /tmp/server.csr -days 365 -CA /tmp/ca.crt -CAkey /tmp/ca.key -CAcreateserial -out /tmp/server.crt
+log "LDAPS: Create a JKS truststore"
+rm -f ldap_truststore.jks
+# We import the test CA certificate
+docker run --rm -v $PWD:/tmp vdesabou/kafka-docker-playground-connect:${CONNECT_TAG} keytool -import -v -alias testroot -file /tmp/ca.crt -keystore /tmp/ldap_truststore.jks -storetype JKS -storepass 'welcome123' -noprompt
+log "LDAPS: Displaying truststore"
+docker run --rm -v $PWD:/tmp vdesabou/kafka-docker-playground-connect:${CONNECT_TAG} keytool -list -keystore /tmp/ldap_truststore.jks -storepass 'welcome123' -v
+cd -
 
 ../../environment/rbac-sasl-plain/stop.sh $@
 
@@ -75,11 +100,17 @@ docker exec openldap ldapsearch -x -h localhost -b dc=confluentdemo,dc=io -D "cn
 log "Creating role bindings for principals"
 docker exec -i tools bash -c "/tmp/helper/create-role-bindings.sh"
 
+log "Validate bindings"
+docker exec -i tools bash -c "/tmp/helper/validate_bindings.sh"
+
 docker-compose -f ../../environment/plaintext/docker-compose.yml -f ../../environment/rbac-sasl-plain/docker-compose.yml ${ENABLE_DOCKER_COMPOSE_FILE_OVERRIDE} build
 docker-compose -f ../../environment/plaintext/docker-compose.yml -f ../../environment/rbac-sasl-plain/docker-compose.yml ${ENABLE_DOCKER_COMPOSE_FILE_OVERRIDE} ${profile_control_center_command} ${profile_ksqldb_command} up -d
 log "📝 To see the actual properties file, use ../../scripts/get-properties.sh <container>"
-log "🔃 If you modify a docker-compose file and want to re-create the container(s), use this command:"
-log "🔃 source ../../scripts/utils.sh && docker-compose -f ../../environment/plaintext/docker-compose.yml -f ../../environment/rbac-sasl-plain/docker-compose.yml ${ENABLE_DOCKER_COMPOSE_FILE_OVERRIDE} ${profile_control_center_command} ${profile_ksqldb_command} up -d"
+command="source ../../scripts/utils.sh && docker-compose -f ../../environment/plaintext/docker-compose.yml -f ../../environment/rbac-sasl-plain/docker-compose.yml ${ENABLE_DOCKER_COMPOSE_FILE_OVERRIDE} ${profile_control_center_command} ${profile_ksqldb_command} up -d"
+echo "$command" > /tmp/playground-command
+log "✨ If you modify a docker-compose file and want to re-create the container(s), run ../../scripts/recreate-containers.sh or use this command:"
+log "✨ $command"
+
 
 if [ "$#" -ne 0 ]
 then
